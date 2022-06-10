@@ -32,16 +32,16 @@ _start:
 	li s2, CONFIG_DEFAULT_PORT # s2: port
 	la s3, s_default_shell # s3: shell
 	
-	li t0, 1
-	ble s0, t0, .Lno_args
+	li t0, 2
+	blt s0, t0, .Lno_args
 	addi t0, s1, 4 # s4: &argv[1]
 	lw a0, (t0) # argv[1]
 	jal atoi
 	jal die_if_error
 	mv s2, a0 # port = atoi(argv[1])
 
-	li t0, 2
-	bne s0, t0, .Lno_shell
+	li t0, 3
+	blt s0, t0, .Lno_shell
 	addi t0, s1, 8 # argv[2]
 	lw s3, (t0) # shell = argv[2]
 .Lno_shell:
@@ -150,7 +150,7 @@ fork_off_shell:
 	sw zero, 4(sp) # NULL
 	sw a0, (sp) # name
 	mv a1, sp # argv = [name, NULL]
-	# FIXME Inherit envp
+	# Inherit envp
 	la a2, envp
 	lw a2, (a2)
 	# addi a2, sp, 4
@@ -190,7 +190,7 @@ bind_localhost_socket:
 	srli t3, t0, 8 # t3: high byte -> low byte
 	or t0, t2, t3
 
-	slli t0, t0, 16
+	slli t0, t0, 16 # port << 16
 	li t1, AF_INET
 	xor t0, t1, t0 # AF_INET | port << 16
 	

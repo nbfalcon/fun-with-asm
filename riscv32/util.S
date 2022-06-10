@@ -16,27 +16,26 @@ strlen:
         ret
 
 .global atoi
-# a0: char * (number in decimal)
+# a0: number_s: char * (number in decimal)
 atoi:
-	# a0 = p_cur
-	lb t1, (a0) # t1: c = *p_cur
-	beqz t1, .Latoi_malformed
-	li t3, 10 # * 10
-	li t4, '0' # - '0'
-	li t5, 0 # >= 0
-	li t6, 9 # <= 9
-	li t0, 0
+	mv t0, zero # t0: result
+	lb t1, (a0) # t1: c
+	beqz t1, .Latoi_malformed # empty string
+	li t2, 10 # constant: 10
+	li t3, '0' # constant: '0'
+	li t4, 9 # constant: 9 (>= 9)
 .Latoi_loop:
-	mul t0, t0, t3 # acc = acc * 10
+	sub t1, t1, t3 # ascii -> decimal
+	# unsigned greater than -> this is not a number (in '0'..'9'),
+	# since negative numbers are unsigned large
+	bgtu t1, t4, .Latoi_malformed
 
-	sub t1, t1, t3 # t1 = c - '0'
-	blt t1, t5, .Latoi_malformed
-	bgt t1, t6, .Latoi_malformed
-	add t0, t0, t1 # acc = acc * 10 + (c - '0')
+	mul t0, t0, t2 # acc = acc * 10
+	add t0, t0, t1 # ... + (c - '0')
 
-	addi a0, a0, 1 # ++p_cur
-	lb t1, (a0) # c = *p_cur
-	bnez t1, .Latoi_loop # empty string = error
+	addi a0, a0, 1 # ++number_s
+	lb t1, (a0) # c = *number_s
+	bnez t1, .Latoi_loop
 .Latoi_end:
 	mv a0, t0
 	ret
