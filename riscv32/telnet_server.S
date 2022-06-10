@@ -23,10 +23,11 @@ _start:
 	li t0, 3
 	bgt s0, t0, .Ltoo_many_args
 	addi s1, sp, 4 # s1: argv
-	addi t0, s0, 1 # after NULL
+	addi t0, s0, 1 # to: index of &envp[0] (&argv[argc + 1] because of NULL)
 	slli t0, t0, 2 # *4 (we are dealing with char* here, sizeof(char*) = 4)
+	add t2, s1, t0
 	la t1, envp
-	sw t0, (t1) # envp = env
+	sw t2, (t1) # envp = env
 
 	li s2, CONFIG_DEFAULT_PORT # s2: port
 	la s3, s_default_shell # s3: shell
@@ -150,9 +151,9 @@ fork_off_shell:
 	sw a0, (sp) # name
 	mv a1, sp # argv = [name, NULL]
 	# FIXME Inherit envp
-	# la a2, envp
-	# lw a2, (a2)
-	addi a2, sp, 4
+	la a2, envp
+	lw a2, (a2)
+	# addi a2, sp, 4
 	li a7, __NR_execve
 	ecall
 
