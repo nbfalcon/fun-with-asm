@@ -54,6 +54,12 @@ _start:
 	sw s3, (t0)
 	# a0 is sockfd from above
 	jal serve_telnet
+
+	# Close socket once we're done serving	
+	mv a0, s2
+	li a7, __NR_close
+	ecall
+
 	jal die_if_error
 
 	# Success, yay :)
@@ -117,7 +123,7 @@ fork_off_shell:
 	bltz a0, .Lfork_failed
 	bnez a0, .Lfork_parent
 .Lfork_child:
-	# FIXME Skip error handling?
+	# Skip error handling in child
 	mv a0, t0
 	mv a1, zero
 	mv a2, zero
@@ -159,18 +165,22 @@ fork_off_shell:
 	la t1, last_error
 	sw t0, (t1)
 .Lfork_parent:
+	mv a0, t0 # close the fd
+	li a7, __NR_close
+	ecall
 	ret
 
 # a0: port
 bind_localhost_socket:
 	mv t0, a0 # t0: port
-	# scoket()
+	# socket()
 	li a0, AF_INET
 	li a1, (SOCK_STREAM | SOCK_CLOEXEC) # we will fork, and the shell should not have access to the server
 	mv a2, zero
 	li a7, __NR_socket
 	ecall
 	blt a0, zero, .Lsocket_failed
+	mv t6, a0 # t6: contains the socket for unwind
 	addi sp, sp, -(2 + 2 + 4 + 8) # sin_family + sin_port + sin_addr (long = 4 byte, ILP32), pad[8]
 	
 	# swap byte-order of port
@@ -193,20 +203,18 @@ bind_localhost_socket:
 	mv a1, sp
 	li a2, 16
 	li a7, __NR_bind
-	mv t0, a0 # save the socket, we'll want to return it later
 	ecall
 	addi sp, sp, 16
 	blt a0, zero, .Lbind_failed
 
 	# listen()
-	mv a0, t0
+	mv a0, t6
 	li a1, CONFIG_BACKLOG
 	li a7, __NR_listen
 	ecall
 	blt a0, zero, .Llisten_failed
-	# FIXME: close the socket x2
 	
-	mv a0, t0
+	mv a0, t6
 	ret
 .Lsocket_failed:
 	la t0, e_socket_failed
@@ -217,11 +225,15 @@ bind_localhost_socket:
 	la t0, e_bind_failed
 	la t1, last_error
 	sw t0, (t1)
-	ret
+	j .Llisten_failed_with_socket
 .Llisten_failed:
 	la t0, e_listen_failed
 	la t1, last_error
 	sw t0, (t1)
+.Llisten_failed_with_socket:
+	mv a0, t6
+	li a7, __NR_close
+	ecall
 	ret
 
 BEGIN_RODATA
