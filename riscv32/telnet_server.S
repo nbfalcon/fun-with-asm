@@ -80,15 +80,21 @@ serve_telnet:
 	SAVE(ra, 0)
 	SAVE(s0, 1)
 	mv s0, a0
+	addi sp, sp, -8
+	li t0, -1
+	sw t0, 4(sp)
+	sw s0, (sp) # server socket
 .Lserve_loop:
 	mv a0, s0
 	jal dispatch_connection
 	bltz a0, .Lserve_error
+	mv a1, sp # additional_fds_to_close: server_socket
 	jal fork_off_shell
 	bltz a0, .Lserve_error
 	j .Lserve_loop
 .Lserve_error:
 .Lserve_end:
+	addi sp, sp, 8
 	REST(ra, 0)
 	REST(s0, 1)
 	ret
@@ -109,9 +115,11 @@ dispatch_connection:
 	ret
 
 # a0: sockfd
+# a1: additional_fds_to_close
 fork_off_shell:
 	ENTER(1) # space for tid
 	mv t0, a0
+	mv t1, a1
 	# glibc does this like that; on riscv we don't have fork for some reason
 	li a0, (CLONE_VFORK | CLONE_VM | SIGCHLD)
 	mv a1, sp
@@ -140,9 +148,12 @@ fork_off_shell:
 	mv a2, zero # flags
         li a7, __NR_dup3
         ecall
+
 	mv a0, t0
 	li a7, __NR_close
 	ecall
+	mv a0, t1
+	jal close_fds
 
 	la t0, which_shell
 	lw a0, (t0) # arg: pathname
@@ -169,6 +180,22 @@ fork_off_shell:
 	mv a0, t0 # close the fd
 	li a7, __NR_close
 	ecall
+	ret
+
+# a0: [fd0, fd1, ..., -1]
+close_fds:
+	mv t1, a0
+	lw t0, (t1)
+	bltz t0, .Lclose_fds_end
+.Lclose_fds_loop:
+	mv a0, t0
+	li a7, __NR_close
+	ecall
+
+	addi t1, t1, 4
+	lw t0, (t1)
+	bgez t0, .Lclose_fds_loop
+.Lclose_fds_end:
 	ret
 
 # a0: port
